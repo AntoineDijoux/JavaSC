@@ -7,6 +7,38 @@ import static org.junit.Assert.assertNull;
 public class CacheManagerTest {
 
     /**
+     * Simulates access to database with 1s delay
+     * @throws if the integer is null
+     */
+    private Integer getDataDelay(Integer i)
+    {
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return i.intValue() + 1;
+    }
+
+    /**
+     * Simulates access to database with 1s delay
+     * @param s
+     * @return
+     */
+    private String getDataDelay(String s)
+    {
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if(s == null)
+            return "Nullvalue";
+
+        return s.concat("value");
+    }
+
+    /**
      * @throws if the integer is null
      */
     private Integer getData(Integer i)
@@ -111,7 +143,23 @@ public class CacheManagerTest {
         });
     }
 
+    /**
+     * Will throw if it takes more than 10s to do 50*1s operations in parallel.
+     * That would highlight a problem with our cache lock system
+     */
+    @Test(timeout = 10000)
+    public void testMultiThreadPrimitiveWithDelay()
+    {
+        // Arrange
+        int[] range = IntStream.rangeClosed(1, 50).toArray();
+        Cache<Integer, Integer> cacheManager = new CacheManager();
 
+        // Act
+        Arrays.stream(range).parallel().forEach(x ->
+        {
+            assertEquals(x+1, (int) cacheManager.get(x, (y) -> getDataDelay(y)));
+        });
+    }
 
     /**
      * Attempt at testing the multi threading writing and reading with collision.
