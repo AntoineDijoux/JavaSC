@@ -14,7 +14,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     /**
      * The present. Used instead of Epoch to save 50 years of epoch time in bits
      */
-    private Long _engineStartTimeFromEpoch;
+    private final Long _engineStartTimeFromEpoch;
 
     /**
      * Lock that allows multiple reads at the same time
@@ -40,7 +40,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     /**
      * Used to run the callback methods
      */
-    private ScheduledExecutorService _executorService;
+    private final ScheduledExecutorService _executorService;
 
     /**
      * The deadlines
@@ -52,7 +52,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     /**
      * Nb of cores, useful to optimise our executor
      */
-    private int _nbCores;
+    private final int _nbCores;
 
     /**
      * Acceptable timeout in milliseconds for the callbacks to finish
@@ -80,8 +80,8 @@ public class DeadlineFastManager implements DeadlineEngine {
 
     /**
      * Converts a timefromEpoch to a timeFromNow. Then frees X bits to the left.
-     * @param timeFromEpoch
-     * @return
+     * @param timeFromEpoch the original time from Epoch
+     * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
     private long getHeadTimeBitwise(long timeFromEpoch)
     {
@@ -141,7 +141,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     public boolean cancel(long requestId) {
         _writeLock.lock();
         try {
-            return _deadlines.remove(_deadlines);
+            return _deadlines.remove(requestId);
         } finally {
             _writeLock.unlock();
         }

@@ -3,7 +3,7 @@ import java.util.function.Function;
 
 public class CacheManager<K, V> implements Cache<K, V> {
 
-    private HashMap<K, V> _localCache;
+    private final HashMap<K, V> _localCache;
 
     public CacheManager() {
         _localCache = new HashMap<>();
