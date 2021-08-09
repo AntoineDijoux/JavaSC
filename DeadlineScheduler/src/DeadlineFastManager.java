@@ -52,7 +52,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      * first (1+) 40 bits are the deadline time in the future from now in milliseconds
      * last 20 bits are the unique ID of the deadline
      */
-    private TreeSet<Long> _deadlines;
+    private final TreeSet<Long> _deadlines;
 
     /**
      * Nb of cores, useful to optimise our executor
@@ -125,7 +125,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public long schedule(long deadlineMs) {
         // We convert to our time notation
-        var bitwiseDeadLineTime = getDeadLineLowerBoundBitwise(deadlineMs);
+        var bitwiseDeadLineLowerBound = getDeadLineLowerBoundBitwise(deadlineMs);
 
         // The upper bound for the IDs range for that given deadline
         var bitwiseDeadLineUpperBound = getDeadLineUpperBoundBitwise(deadlineMs);
@@ -136,7 +136,7 @@ public class DeadlineFastManager implements DeadlineEngine {
         try {
             // from the treeSet, we retrieve a subset of all the IDs for that deadline,
             // meaning everything that is bitwise between the deadline and the deadline + 1
-            subTreeForThatDeadline = _deadlines.subSet(bitwiseDeadLineTime, bitwiseDeadLineUpperBound);
+            subTreeForThatDeadline = _deadlines.subSet(bitwiseDeadLineLowerBound, bitwiseDeadLineUpperBound);
         } finally {
             _readLock.unlock();
         }
@@ -145,8 +145,8 @@ public class DeadlineFastManager implements DeadlineEngine {
         try {
             // If we don't have any element in that subset, it means we have no deadline for that time
             if (subTreeForThatDeadline.isEmpty()) {
-                _deadlines.add(bitwiseDeadLineTime);
-                return bitwiseDeadLineTime;
+                _deadlines.add(bitwiseDeadLineLowerBound);
+                return bitwiseDeadLineLowerBound;
             }
             // Else, we already have at least one deadline ID for that time. We add one.
             else {
