@@ -17,6 +17,11 @@ public class DeadlineFastManager implements DeadlineEngine {
     private final Long _engineStartTimeFromEpoch;
 
     /**
+     * This is 34 years from now in milliseconds
+     */
+    private final Long _maximumDeadline = 2L << 40;
+
+    /**
      * Lock that allows multiple reads at the same time
      */
     private final ReentrantReadWriteLock _readWriteLock = new ReentrantReadWriteLock();
@@ -35,7 +40,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      * Number of bits reserves for a unique ID at a given date
      * 2^20 = 1 million different entries allowed for a given date
      */
-    private final byte _deadlineUniqueIdBytes = 20;
+    private final long _deadlineUniqueIdBits = 20;
 
     /**
      * Used to run the callback methods
@@ -72,7 +77,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public DeadlineFastManager(long handlersTimeOut) {
         _deadlines = new TreeSet<>();
-        _engineStartTimeFromEpoch = Instant.EPOCH.toEpochMilli();
+        _engineStartTimeFromEpoch = Instant.now().toEpochMilli();
         _nbCores = Runtime.getRuntime().availableProcessors();
         _executorService = Executors.newScheduledThreadPool(_nbCores);
         _shutdownTimeOut = handlersTimeOut;
@@ -83,12 +88,32 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @param timeFromEpoch the original time from Epoch
      * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
-    private long getHeadTimeBitwise(long timeFromEpoch)
-    {
+    private long getDeadLineLowerBoundBitwise(long timeFromEpoch) throws IllegalArgumentException {
         var futureMilliseconds = Math.max(timeFromEpoch - _engineStartTimeFromEpoch, 0);
-        return futureMilliseconds << _deadlineUniqueIdBytes;
+
+        if(futureMilliseconds > _maximumDeadline)
+            throw new IllegalArgumentException("The deadline you sent it more than 34 years in the future");
+
+        return futureMilliseconds << _deadlineUniqueIdBits;
     }
 
+    /**
+     * Converts a timefromEpoch to a timeFromNow. Then frees X bits to the left.
+     * @param timeFromEpoch the original time from Epoch
+     * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
+     */
+    private long getDeadLineUpperBoundBitwise(long timeFromEpoch){
+        var futureMilliseconds = Math.max(timeFromEpoch - _engineStartTimeFromEpoch, 0) + 1;
+
+        if(futureMilliseconds > _maximumDeadline)
+            throw new IllegalArgumentException("The deadline you sent it more than 34 years in the future");
+
+        // We make sure that the upperBound is not stuck at 0. It is the biggest value between what we found,
+        // and the minimum bound, which is 2 ^ idBits
+        // futureMilliseconds = Math.max(futureMilliseconds, 1L << _deadlineUniqueIdBits);
+
+        return futureMilliseconds << _deadlineUniqueIdBits;
+    }
     /**
      * Request a new deadline be added to the engine.  The deadline is in millis offset from
      * unix epoch. https://en.wikipedia.org/wiki/Unix_time
@@ -100,8 +125,10 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public long schedule(long deadlineMs) {
         // We convert to our time notation
-        var bitwiseDeadLineTime = getHeadTimeBitwise(deadlineMs);
-        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(deadlineMs + 1);
+        var bitwiseDeadLineTime = getDeadLineLowerBoundBitwise(deadlineMs);
+
+        // The upper bound for the IDs range for that given deadline
+        var bitwiseDeadLineUpperBound = getDeadLineUpperBoundBitwise(deadlineMs);
 
         SortedSet<Long> subTreeForThatDeadline;
         _readLock.lock();
@@ -162,7 +189,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public int poll(long nowMs, Consumer<Long> handler, int maxPoll) {
         // We convert to our time notation
-        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(nowMs + 1);
+        var bitwiseDeadLineUpperBound = getDeadLineLowerBoundBitwise(nowMs + 1);
 
         SortedSet<Long> subTreeForThatDeadline;
         _readLock.lock();
