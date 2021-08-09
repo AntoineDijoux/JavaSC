@@ -10,3 +10,4 @@ Foreword:
 Technical:
 - Developped with Intellij
 - Java 16.0.2
+- Notes on the implementation and algorithm will be found in the code's comments.
