@@ -4,6 +4,11 @@ import java.io.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.*;
@@ -275,5 +280,46 @@ public class DeadlineFastManagerTest {
         // should trigger now
         pollresult = _dm.poll(Instant.now().toEpochMilli(), _printer, 5);
         assertEquals(1, pollresult);
+    }
+
+    /**
+     * We attempt different operations, trying to provoke collisions
+     * @throws ExecutionException
+     * @throws InterruptedException
+     */
+    @Test
+    public void multiThreadTest1() throws ExecutionException, InterruptedException {
+        ArrayList<Future> futuresSchedule = new ArrayList();
+
+        int nbThreads = 200;
+        ExecutorService service = Executors.newFixedThreadPool(nbThreads);
+
+        for (int i = 0; i < nbThreads; i++) {
+            futuresSchedule.add(service.submit(() -> {
+                _dm.schedule(Instant.now().toEpochMilli());
+                int size = _dm.size();
+            }));
+        }
+
+        ArrayList<Future> futuresPoll = new ArrayList();
+
+        for (Future future : futuresSchedule) {
+            // Will throw in case of multi concurrent access
+            future.get();
+
+            // Random read write, trying to do a collision
+            futuresPoll.add(service.submit(() -> {
+                int size = _dm.size();
+                _dm.poll(Instant.now().toEpochMilli(), _printer, 100);
+                long scheduled = _dm.schedule(Instant.now().toEpochMilli() + 100);
+                _dm.cancel(scheduled);
+                size = _dm.size();
+            }));
+        }
+
+        for (Future future : futuresPoll) {
+            // Will throw in case of multi concurrent access
+            future.get();
+        }
     }
 }

@@ -78,7 +78,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     }
 
     /**
-     * Converts a timefromEpoch to a timeFromNow. Then frees X bits to the left.
+     * returns the lowerbound for this deadline and its 20 bits of unique IDs
      * @param timeFromEpoch the original time from Epoch
      * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
@@ -90,7 +90,7 @@ public class DeadlineFastManager implements DeadlineEngine {
     }
 
     /**
-     * Converts a timefromEpoch to a timeFromNow. Then frees X bits to the left.
+     * Gives the upper bound for this deadline, with its 20 bits of unique IDs
      * @param timeFromEpoch the original time from Epoch
      * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
