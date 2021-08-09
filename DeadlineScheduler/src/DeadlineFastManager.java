@@ -7,19 +7,14 @@ import java.util.function.Consumer;
 
 /**
  * A (0 (log (n)) performant version of the DeadlineEngine.
- * Technical: leveraging on the stored long, which I would split 40 bits for the deadline (30 years)
+ * Technical: leveraging on the stored long, which I would split 43 bits for the deadline (278 years)
  * and 20 bits of Ids for each deadline (1 million).
  */
 public class DeadlineFastManager implements DeadlineEngine {
     /**
-     * The present. Used instead of Epoch to save 50 years of epoch time in bits
+     * This is 278 years from epoch in milliseconds
      */
-    private final Long _engineStartTimeFromEpoch;
-
-    /**
-     * This is 34 years from now in milliseconds
-     */
-    private final Long _maximumDeadline = 2L << 40;
+    private final Long _maximumDeadline = 2L << 43;
 
     /**
      * Lock that allows multiple reads at the same time
@@ -49,7 +44,7 @@ public class DeadlineFastManager implements DeadlineEngine {
 
     /**
      * The deadlines
-     * first (1+) 40 bits are the deadline time in the future from now in milliseconds
+     * first (1+) 43 bits are the deadline time in the future from now in milliseconds
      * last 20 bits are the unique ID of the deadline
      */
     private final TreeSet<Long> _deadlines;
@@ -68,7 +63,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      * New instance of this class
      */
     public DeadlineFastManager() {
-        this(1000);
+        this(10000);
     }
 
     /**
@@ -77,7 +72,6 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public DeadlineFastManager(long handlersTimeOut) {
         _deadlines = new TreeSet<>();
-        _engineStartTimeFromEpoch = Instant.now().toEpochMilli();
         _nbCores = Runtime.getRuntime().availableProcessors();
         _executorService = Executors.newScheduledThreadPool(_nbCores);
         _shutdownTimeOut = handlersTimeOut;
@@ -89,12 +83,10 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
     private long getDeadLineLowerBoundBitwise(long timeFromEpoch) throws IllegalArgumentException {
-        var futureMilliseconds = Math.max(timeFromEpoch - _engineStartTimeFromEpoch, 0);
-
-        if(futureMilliseconds > _maximumDeadline)
+        if(timeFromEpoch > _maximumDeadline)
             throw new IllegalArgumentException("The deadline you sent it more than 34 years in the future");
 
-        return futureMilliseconds << _deadlineUniqueIdBits;
+        return timeFromEpoch << _deadlineUniqueIdBits;
     }
 
     /**
@@ -103,16 +95,10 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @return the time from the creation of this class's instance, move '_deadlineUniqueIdBytes' bits to the left
      */
     private long getDeadLineUpperBoundBitwise(long timeFromEpoch){
-        var futureMilliseconds = Math.max(timeFromEpoch - _engineStartTimeFromEpoch, 0) + 1;
-
-        if(futureMilliseconds > _maximumDeadline)
+        if(timeFromEpoch > _maximumDeadline)
             throw new IllegalArgumentException("The deadline you sent it more than 34 years in the future");
 
-        // We make sure that the upperBound is not stuck at 0. It is the biggest value between what we found,
-        // and the minimum bound, which is 2 ^ idBits
-        // futureMilliseconds = Math.max(futureMilliseconds, 1L << _deadlineUniqueIdBits);
-
-        return futureMilliseconds << _deadlineUniqueIdBits;
+        return (timeFromEpoch + 1) << _deadlineUniqueIdBits;
     }
     /**
      * Request a new deadline be added to the engine.  The deadline is in millis offset from
@@ -189,7 +175,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     public int poll(long nowMs, Consumer<Long> handler, int maxPoll) {
         // We convert to our time notation
-        var bitwiseDeadLineUpperBound = getDeadLineLowerBoundBitwise(nowMs + 1);
+        var bitwiseDeadLineUpperBound = getDeadLineUpperBoundBitwise(nowMs + 1);
 
         SortedSet<Long> subTreeForThatDeadline;
         _readLock.lock();
@@ -207,6 +193,7 @@ public class DeadlineFastManager implements DeadlineEngine {
                 Long element = longIterator.next();
                 longIterator.remove();
                 runConsumer(handler, element);
+                i++;
             }
         } finally {
             _writeLock.unlock();
