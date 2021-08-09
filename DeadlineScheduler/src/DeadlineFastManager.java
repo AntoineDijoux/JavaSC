@@ -1,6 +1,8 @@
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
 /**
@@ -15,10 +17,19 @@ public class DeadlineFastManager implements DeadlineEngine {
     private Long _engineStartTimeFromEpoch;
 
     /**
-     * Number of bits reserved by the dates themselves from now
-     * 2^40 = 1000 billion seconds = 30 years from now
+     * Lock that allows multiple reads at the same time
      */
-    private final byte _deadlineDateBytes = 40;
+    private final ReentrantReadWriteLock _readWriteLock = new ReentrantReadWriteLock();
+
+    /**
+     * Readlock shortcut for convenience
+     */
+    private final Lock _readLock = _readWriteLock.readLock();
+
+    /**
+     * Writelock shortcut for convenience
+     */
+    private final Lock _writeLock = _readWriteLock.writeLock();
 
     /**
      * Number of bits reserves for a unique ID at a given date
@@ -87,28 +98,37 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @param deadlineMs the millis
      * @return An identifier for the scheduled deadline.
      */
-    public long schedule(long deadlineMs)
-    {
+    public long schedule(long deadlineMs) {
         // We convert to our time notation
         var bitwiseDeadLineTime = getHeadTimeBitwise(deadlineMs);
-        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(deadlineMs+1);
+        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(deadlineMs + 1);
 
-        // from the treeSet, we retrieve a subset of all the IDs for that deadline,
-        // meaning everything that is bitwise between the deadline and the deadline + 1
-        var subTreeForThatDeadline = _deadlines.subSet(bitwiseDeadLineTime, bitwiseDeadLineUpperBound);
+        SortedSet<Long> subTreeForThatDeadline;
+        _readLock.lock();
 
-        // If we don't have any element in that subset, it means we have no deadline for that time
-        if(subTreeForThatDeadline.isEmpty())
-        {
-            _deadlines.add(bitwiseDeadLineTime);
-            return bitwiseDeadLineTime;
+        try {
+            // from the treeSet, we retrieve a subset of all the IDs for that deadline,
+            // meaning everything that is bitwise between the deadline and the deadline + 1
+            subTreeForThatDeadline = _deadlines.subSet(bitwiseDeadLineTime, bitwiseDeadLineUpperBound);
+        } finally {
+            _readLock.unlock();
         }
-        // Else, we already have at least one deadline ID for that time. We add one.
-        else
-        {
-            var newId = subTreeForThatDeadline.last() + 1;
-            subTreeForThatDeadline.add(newId);
-            return newId;
+
+        _writeLock.lock();
+        try {
+            // If we don't have any element in that subset, it means we have no deadline for that time
+            if (subTreeForThatDeadline.isEmpty()) {
+                _deadlines.add(bitwiseDeadLineTime);
+                return bitwiseDeadLineTime;
+            }
+            // Else, we already have at least one deadline ID for that time. We add one.
+            else {
+                var newId = subTreeForThatDeadline.last() + 1;
+                subTreeForThatDeadline.add(newId);
+                return newId;
+            }
+        } finally {
+            _writeLock.unlock();
         }
     }
 
@@ -119,7 +139,12 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @return true if canceled.
      */
     public boolean cancel(long requestId) {
-        return _deadlines.remove(_deadlines);
+        _writeLock.lock();
+        try {
+            return _deadlines.remove(_deadlines);
+        } finally {
+            _writeLock.unlock();
+        }
     }
 
     /**
@@ -135,20 +160,29 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @param maxPoll count of maximum number of expired deadlines to process.
      * @return number of expired deadlines that fired successfully.
      */
-    public int poll(long nowMs, Consumer<Long> handler, int maxPoll)
-    {
+    public int poll(long nowMs, Consumer<Long> handler, int maxPoll) {
         // We convert to our time notation
-        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(nowMs+1);
+        var bitwiseDeadLineUpperBound = getHeadTimeBitwise(nowMs + 1);
 
-        // from the treeSet, we retrieve a subset of all the deadlines where deadline < (deadlineMs + 1)
-        var subTreeForThatDeadline = _deadlines.subSet(0L, bitwiseDeadLineUpperBound);
+        SortedSet<Long> subTreeForThatDeadline;
+        _readLock.lock();
+        try {
+            // from the treeSet, we retrieve a subset of all the deadlines where deadline < (deadlineMs + 1)
+            subTreeForThatDeadline = _deadlines.subSet(0L, bitwiseDeadLineUpperBound);
+        } finally {
+            _readLock.unlock();
+        }
 
         int i = 0;
-        for (Iterator<Long> longIterator = subTreeForThatDeadline.iterator(); longIterator.hasNext() && i < maxPoll;)
-        {
-            Long element = longIterator.next();
-            longIterator.remove();
-            runConsumer(handler, element);
+        _writeLock.lock();
+        try {
+            for (Iterator<Long> longIterator = subTreeForThatDeadline.iterator(); longIterator.hasNext() && i < maxPoll; ) {
+                Long element = longIterator.next();
+                longIterator.remove();
+                runConsumer(handler, element);
+            }
+        } finally {
+            _writeLock.unlock();
         }
 
         return i;
@@ -162,7 +196,7 @@ public class DeadlineFastManager implements DeadlineEngine {
      */
     private void runConsumer(Consumer<Long> handler, Long element)
     {
-        final Future futureTask = _executorService.submit(() -> handler.accept(element));
+        final Future<?> futureTask = _executorService.submit(() -> handler.accept(element));
 
         // We schedule a task that will cancel the handler after a timeout, to avoid orphan threads in the future
         _executorService.schedule(() -> {
@@ -179,7 +213,12 @@ public class DeadlineFastManager implements DeadlineEngine {
      * @return the number of registered deadlines.
      */
     public int size() {
-        return _deadlines.size();
+        _readLock.lock();
+        try {
+            return _deadlines.size();
+        } finally {
+            _readLock.unlock();
+        }
     }
 
     /**
