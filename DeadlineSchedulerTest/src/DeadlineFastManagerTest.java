@@ -18,11 +18,11 @@ public class DeadlineFastManagerTest {
     private DeadlineFastManager _dm = new DeadlineFastManager();
 
     /**
-     *
+     * file printer
      */
     private Consumer<Long> _filePrinter = x -> {
         try {
-            Thread.sleep(50l);
+            Thread.sleep(50L);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -34,7 +34,7 @@ public class DeadlineFastManagerTest {
      */
     private Consumer<Long> _printer = x -> {
         try {
-            Thread.sleep(50l);
+            Thread.sleep(50L);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -42,26 +42,26 @@ public class DeadlineFastManagerTest {
     };
 
     /**
-     * appends to a file the given long
-     * @param myLong
+     * appends the given long to a file
      */
     private void writeToFile(Long myLong) {
         PrintWriter writer = null;
 
         try {
             writer = new PrintWriter(new FileOutputStream(
-                    new File("C:\\temp\\javaTest.txt"),
+                    "C:\\temp\\javaTest.txt",
                     true /* append = true */));
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
 
+        assert writer != null;
         writer.println(myLong);
         writer.close();
     }
 
     /**
-     * Used to generate a date in the past
+     * Used to generate a date far in the past
      * @return an epoch to milliseconds date in the past
      */
     private long getPastDate()
@@ -71,7 +71,7 @@ public class DeadlineFastManagerTest {
     }
 
     /**
-     * Used to generate a date in the future
+     * Used to generate a date in the far future
      * @return an epoch to milliseconds date in the future
      */
     private long getFutureDate()
@@ -284,8 +284,6 @@ public class DeadlineFastManagerTest {
 
     /**
      * We attempt different operations, trying to provoke collisions
-     * @throws ExecutionException
-     * @throws InterruptedException
      */
     @Test
     public void multiThreadTest1() throws ExecutionException, InterruptedException {
