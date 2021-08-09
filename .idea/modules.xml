@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/Caching/Caching.iml" filepath="$PROJECT_DIR$/Caching/Caching.iml" />
       <module fileurl="file://$PROJECT_DIR$/CachingTest/CachingTest.iml" filepath="$PROJECT_DIR$/CachingTest/CachingTest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/DeadlineScheduler/DeadlineScheduler.iml" filepath="$PROJECT_DIR$/DeadlineScheduler/DeadlineScheduler.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/JavaSC.iml" filepath="$PROJECT_DIR$/.idea/JavaSC.iml" />
     </modules>
   </component>
