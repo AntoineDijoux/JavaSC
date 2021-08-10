@@ -1,5 +1,5 @@
 # JavaSC
-Coding challenge, implementation a caching function and a deadline scheduler. The challenge instructions are given as the interfaces DeadlineEngine.java and Cache.java.
+Coding challenge, implementation of a caching function and a deadline scheduler. Challenge instructions were given in the form of the interfaces DeadlineEngine.java and Cache.java.
 
 Foreword:
 - Those are my very first steps into Java. I picked up and learnt as I was going through the assignment.
